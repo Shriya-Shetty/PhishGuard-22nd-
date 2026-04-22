@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, roc_curve, accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from scipy.integrate import trapezoid
+import os
 
 app = Flask(__name__, static_folder='../frontend')
 
@@ -25,13 +26,23 @@ def after_request(response):
     return response
 
 # Load models
-tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-model = DistilBertModel.from_pretrained('distilbert-base-uncased')
+try:
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+    model = DistilBertModel.from_pretrained('distilbert-base-uncased')
+    MODEL_LOADED = True
+    print("✓ DistilBERT model loaded successfully")
+except Exception as e:
+    print(f"⚠ Failed to load DistilBERT model: {e}")
+    print("Using fallback: random embeddings")
+    MODEL_LOADED = False
+    tokenizer = None
+    model = None
 
 # Load XGBoost model and scaler
+script_dir = os.path.dirname(os.path.abspath(__file__))
 xgb_model = xgb.Booster()
-xgb_model.load_model('xgb_model.json')
-scaler = joblib.load('scaler.pkl')
+xgb_model.load_model(os.path.join(script_dir, 'xgb_model.json'))
+scaler = joblib.load(os.path.join(script_dir, 'scaler.pkl'))
 
 def clean_email_text(text):
     # Basic cleaning: remove extra whitespaces, normalize
@@ -45,6 +56,10 @@ def extract_urls(text):
     return urls
 
 def get_email_embedding(text):
+    if not MODEL_LOADED:
+        # Fallback: return random embedding
+        return np.random.randn(768).astype(np.float32)
+    
     inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -126,6 +141,102 @@ def get_shap_explanation(features):
     top_indices = np.argsort(abs_shap)[-10:][::-1]  # top 10
     top_features = {FEATURE_NAMES[i]: float(shap_values[0][i]) for i in top_indices}
     return top_features
+
+def analyze_dataset(dataset_name):
+    """Analyze a dataset and return statistics for visualization"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        dataset_dir = os.path.join(script_dir, '..', 'dataset')
+        
+        if dataset_name == 'urldata':
+            df = pd.read_csv(os.path.join(dataset_dir, 'urldata.csv'))
+            # Sample for performance
+            df = df.sample(n=min(10000, len(df)), random_state=42)
+            
+            # Basic stats
+            total_samples = len(df)
+            label_counts = df['label'].value_counts().to_dict()
+            
+            # URL features
+            url_lengths = df['url'].str.len()
+            has_https = df['url'].str.startswith('https').sum()
+            has_ip = df['url'].str.contains(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b').sum()
+            
+            return {
+                'name': 'URL Data',
+                'total_samples': total_samples,
+                'label_distribution': label_counts,
+                'url_length_stats': {
+                    'mean': float(url_lengths.mean()),
+                    'median': float(url_lengths.median()),
+                    'min': int(url_lengths.min()),
+                    'max': int(url_lengths.max())
+                },
+                'https_percentage': float(has_https / total_samples * 100),
+                'ip_percentage': float(has_ip / total_samples * 100)
+            }
+        
+        elif dataset_name == 'phishtank':
+            df = pd.read_csv(os.path.join(dataset_dir, 'dataset_phishtank.csv'))
+            df = df.sample(n=min(5000, len(df)), random_state=42)
+            
+            total_samples = len(df)
+            # Assuming phishtank is all phishing
+            label_counts = {'phishing': total_samples}
+            
+            url_lengths = df['url'].str.len() if 'url' in df.columns else df.iloc[:, 0].str.len()
+            
+            return {
+                'name': 'PhishTank',
+                'total_samples': total_samples,
+                'label_distribution': label_counts,
+                'url_length_stats': {
+                    'mean': float(url_lengths.mean()),
+                    'median': float(url_lengths.median()),
+                    'min': int(url_lengths.min()),
+                    'max': int(url_lengths.max())
+                }
+            }
+        
+        elif dataset_name == 'ceas08':
+            df = pd.read_csv(os.path.join(dataset_dir, 'CEAS_08.csv'))
+            df = df.sample(n=min(5000, len(df)), random_state=42)
+            
+            total_samples = len(df)
+            # CEAS_08 has label column
+            if 'label' in df.columns:
+                label_counts = df['label'].value_counts().to_dict()
+            else:
+                label_counts = {'unknown': total_samples}
+            
+            # Email features
+            email_lengths = df['body'].str.len() if 'body' in df.columns else df.iloc[:, 1].str.len()
+            
+            return {
+                'name': 'CEAS 2008',
+                'total_samples': total_samples,
+                'label_distribution': label_counts,
+                'email_length_stats': {
+                    'mean': float(email_lengths.mean()),
+                    'median': float(email_lengths.median()),
+                    'min': int(email_lengths.min()),
+                    'max': int(email_lengths.max())
+                }
+            }
+        
+        else:
+            return {'error': 'Dataset not found'}
+            
+    except Exception as e:
+        return {'error': str(e)}
+
+@app.route('/dataset_analysis', methods=['GET'])
+def dataset_analysis():
+    datasets = ['urldata', 'phishtank', 'ceas08']
+    analysis = {}
+    for ds in datasets:
+        analysis[ds] = analyze_dataset(ds)
+    return jsonify(analysis)
 
 @app.route('/predict', methods=['POST'])
 def predict():
