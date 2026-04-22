@@ -70,8 +70,24 @@ for url in df['url']:
 # Dummy email embeddings (768 dim random)
 email_embeddings = np.random.randn(len(df), 768)
 
-# Fuse features
-X = np.concatenate([email_embeddings, np.array(url_features)], axis=1)
+# Dummy email address features (8 dim random, matching future real features)
+def extract_dummy_email_addr_features():
+    import numpy as np
+    return [
+        np.random.uniform(5, 50),      # email_addr_len
+        np.random.uniform(5, 30),      # domain_len
+        np.random.choice([0,1], p=[0.8, 0.2]),  # suspicious_tld
+        np.random.choice([0,1], p=[0.6, 0.4]),  # free_domain
+        np.random.uniform(1, 5),       # num_dots_domain
+        np.random.choice([0,1], p=[0.3, 0.7]),  # has_digits_addr
+        np.random.uniform(2, 5),       # domain_entropy
+        np.random.choice([0,1], p=[0.85, 0.15]) # has_plus
+    ]
+
+email_addr_features = np.array([extract_dummy_email_addr_features() for _ in range(len(df))])
+
+# Fuse features (801 dims total)
+X = np.concatenate([email_embeddings, np.array(url_features), email_addr_features], axis=1)
 y = df['label'].values
 
 # Split

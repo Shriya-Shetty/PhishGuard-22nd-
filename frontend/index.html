@@ -19,7 +19,9 @@
         <textarea id="emailText" required></textarea><br><br>
         <label for="urlInput">Enter URL:</label><br>
         <input id="urlInput" type="url" required style="width: 100%; padding: 10px;"><br><br>
-        <button type="submit">Analyze Email + URL</button>
+        <label for="emailAddress">Email Address (sender):</label><br>
+        <input id="emailAddress" type="email" placeholder="sender@example.com" style="width: 100%; padding: 10px;"><br><br>
+        <button type="submit">Analyze Email + URL + Sender</button>
     </form>
     <div id="result"></div>
 
@@ -281,20 +283,21 @@
             
             const emailText = document.getElementById('emailText').value;
             const url = document.getElementById('urlInput').value;
+            const emailAddress = document.getElementById('emailAddress').value;
 
             try {
                 // 1. Predict
                 const predRes = await fetch('http://localhost:5000/predict_email_url', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email_text: emailText, url: url})
+                    body: JSON.stringify({email_text: emailText, url: url, email_address: emailAddress})
                 });
                 const predData = await predRes.json();
 
                 // Render prediction results
                 const resultDiv = document.getElementById('result');
                 const isPhishing = predData.classification === 'Phishing';
-                const flag = isPhishing ? '🚨 PHISHING ALERT 🚨' : '✅ LEGITIMATE';
+                const flag = isPhishing ? 'PHISHING ALERT' : 'LEGITIMATE';
                 const flagClass = isPhishing ? 'alert-phishing' : 'alert-legitimate';
                 
                 resultDiv.innerHTML = `

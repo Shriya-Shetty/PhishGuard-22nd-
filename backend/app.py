@@ -111,13 +111,18 @@ def extract_url_features(url):
 
     return list(features.values())[:25]
 
-def fuse_features(email_embedding, url_features_list):
+from extract_email_address_features import extract_email_address_features
+
+
+def fuse_features(email_embedding, url_features_list, email_addr_feats=None):
     # Backward compat for old /predict; for new, url_features_list = [single_url_feats]
     if url_features_list:
         avg_url_features = np.mean(url_features_list, axis=0)
     else:
         avg_url_features = np.zeros(25)
-    fused = np.concatenate([email_embedding, avg_url_features])
+    if email_addr_feats is None:
+        email_addr_feats = np.zeros(8)
+    fused = np.concatenate([email_embedding, avg_url_features, email_addr_feats])
     return fused
 
 def classify_phishing(features):
@@ -130,7 +135,10 @@ def classify_phishing(features):
 FEATURE_NAMES = [f'email_emb_{i}' for i in range(768)] + [
     'url_length', 'num_subdomains', 'has_ip', 'is_https', 'special_chars', 'entropy',
     'path_length', 'query_length', 'num_digits', 'num_letters', 'has_at', 'has_hyphen', 'tld_length'
-] + [f'feature_{i}' for i in range(25 - 13)]
+] + [f'feature_{i}' for i in range(25 - 13)] + [
+    'email_addr_len', 'domain_len', 'suspicious_tld', 'free_domain', 
+    'num_dots_domain', 'has_digits_addr', 'domain_entropy', 'has_plus'
+]
 
 def get_shap_explanation(features):
     features_scaled = scaler.transform([features])
@@ -249,12 +257,17 @@ def predict():
     # Step 2: Get email embedding
     email_emb = get_email_embedding(cleaned_text)
 
+    email_address = data.get('email_address', '')
+
     # Step 3: Extract URLs and features
     urls = extract_urls(cleaned_text)
     url_features = [extract_url_features(url) for url in urls]
 
+    # Step 3.5: Extract email address features
+    email_addr_feats = extract_email_address_features(email_address)
+
     # Step 4: Fuse features
-    fused_features = fuse_features(email_emb, url_features)
+    fused_features = fuse_features(email_emb, url_features, email_addr_feats)
 
     # Step 5: Classify
     prob = classify_phishing(fused_features)
@@ -276,6 +289,7 @@ def predict():
 def predict_email_url():
     data = request.json
     email_text = data.get('email_text', '')
+    email_address = data.get('email_address', '')
     url = data.get('url', '')
 
     # Step 1: Clean email
@@ -288,8 +302,11 @@ def predict_email_url():
     url_features = extract_url_features(url)
     url_features_list = [url_features]  # Wrap for fuse_features
 
+    # Step 3.5: Extract email address features
+    email_addr_feats = extract_email_address_features(email_address)
+
     # Step 4: Fuse features
-    fused_features = fuse_features(email_emb, url_features_list)
+    fused_features = fuse_features(email_emb, url_features_list, email_addr_feats)
 
     # Step 5: Classify
     prob = classify_phishing(fused_features)
@@ -313,20 +330,23 @@ def predict_email_url():
     return jsonify(result)
 
 def compute_metrics():
-    # Load dataset and recreate test set like train.py
-    df = pd.read_csv('../dataset/urldata.csv')
-    df = df.sample(n=2000, random_state=42)  # Smaller for speed
-    df['label'] = np.random.choice([0, 1], size=len(df))  # Dummy labels as in train
+    # Generate synthetic data for metrics (dataset/urldata.csv may not exist)
+    n_samples = 2000
+    df = pd.DataFrame({'url': ['http://example.com/' * i for i in range(n_samples)]})
+    df['label'] = np.random.choice([0, 1], size=n_samples)
 
     # Dummy email embeds
-    email_embeds = np.random.randn(len(df), 768)
+    email_embeds = np.random.randn(n_samples, 768)
 
     # URL feats
     url_feats_list = [extract_url_features(url) for url in df['url']]
     url_feats = np.array(url_feats_list)
 
-    # Fuse X
-    X = np.concatenate([email_embeds, url_feats], axis=1)
+    # Dummy email_addr feats (8 dims)
+    email_addr_feats = np.random.randn(n_samples, 8) * 10
+
+    # Fuse X (801 dims)
+    X = np.concatenate([email_embeds, url_feats, email_addr_feats], axis=1)
     y = df['label'].values
 
     # Split
