@@ -1,390 +1,258 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PhishGuard - Phishing Detection with Visualizations</title>
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        textarea { width: 100%; height: 200px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
-        #result { margin-top: 20px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhishGuard Advanced</title>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+<style>
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        margin: 0;
+        background: linear-gradient(135deg, #e0f2fe, #ffffff);
+        color: #0f172a;
+    }
+
+    header {
+        padding: 20px;
+        text-align: center;
+        font-size: 28px;
+        font-weight: bold;
+        background: #bae6fd;
+        color: #0f172a;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 40px auto;
+        padding: 20px;
+        background: white;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: bold;
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
+    .tab-btn.active {
+        background: #38bdf8;
+        color: white;
+    }
+
+    input {
+        width: 100%;
+        padding: 10px 12px;
+        margin-top: 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5f5;
+        background: #f8fafc;
+        color: #0f172a;
+        height: 42px;
+        box-sizing: border-box;
+    }
+
+    textarea {
+        width: 100%;
+        padding: 12px;
+        margin-top: 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5f5;
+        background: #f8fafc;
+        color: #0f172a;
+        height: 120px;
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    button.action {
+        margin-top: 20px;
+        padding: 12px;
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        background: #38bdf8;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    #result {
+        margin-top: 30px;
+        padding: 20px;
+        border-radius: 10px;
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+
+    .badge {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: bold;
+        color: white;
+    }
+
+    .phish { background: #ef4444; }
+    .legit { background: #22c55e; }
+</style>
+
 </head>
+
 <body>
-    <h1>PhishGuard - Email Phishing Detection</h1>
-<form id="phishForm">
-        <label for="emailText">Paste Email Text:</label><br>
-        <textarea id="emailText" required></textarea><br><br>
-        <label for="urlInput">Enter URL:</label><br>
-        <input id="urlInput" type="url" required style="width: 100%; padding: 10px;"><br><br>
-        <label for="emailAddress">Email Address (sender):</label><br>
-        <input id="emailAddress" type="email" placeholder="sender@example.com" style="width: 100%; padding: 10px;"><br><br>
-        <button type="submit">Analyze Email + URL + Sender</button>
-    </form>
-    <div id="result"></div>
 
-    <script>
-        // Helper to create styled badge
-        function createBadge(text, className) {
-            return `<span class="badge ${className}">${text}</span>`;
-        }
+<header>🛡️ PhishGuard - Advanced Detection</header>
 
-        // Plot features table
-        function plotFeaturesTable(feature_names, full_features) {
-            const data = [{
-                type: 'table',
-                columnwidth: [200, 100],
-                columnorder: [0, 1],
-                line: {color: 'rgb(0,0,0)'},
-                header: {
-                    values: ['Feature', 'Value'],
-                    line: {color: 'black', width: 1},
-                    fill: {color: '#d3d3d3'},
-                    align: 'left',
-                    font: {family: 'Arial', size: 14, color: 'black'}
-                },
-                cells: {
-                    values: [feature_names, Object.values(full_features)],
-                    line: {color: 'black', width: 1},
-                    fill: {color: ['#f0f8ff', 'white']},
-                    align: 'left',
-                    font: {family: 'Arial', size: 12, color: ['black']}
-                }
-            }];
-            Plotly.newPlot('features-table', data, {height: 600, scrollZoom: true});
-        }
+<div class="container">
 
-        // Plot SHAP bar
-        function plotShapBar(top_shap) {
-            const sorted_shap = Object.entries(top_shap).sort(([,a], [,b]) => Math.abs(b) - Math.abs(a));
-            const features = sorted_shap.map(([f]) => f);
-            const values = sorted_shap.map(([,v]) => v);
-            const colors = values.map(v => v > 0 ? 'red' : 'blue');
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('url')">URL Detection</button>
+        <button class="tab-btn" onclick="switchTab('email')">Email Detection</button>
+    </div>
 
-            const data = [{
-                x: values,
-                y: features,
-                orientation: 'h',
-                type: 'bar',
-                marker: {color: colors}
-            }];
-            const layout = {
-                title: 'Top 10 SHAP Values',
-                xaxis: {title: 'SHAP Value'},
-                height: 400
-            };
-            Plotly.newPlot('shap-plot', data, layout);
-        }
+    <!-- URL -->
+    <div id="urlTab">
+        <h2>🔗 URL Detection</h2>
+        <input id="urlInput" type="url" placeholder="Enter suspicious URL">
+        <button class="action" onclick="analyzeURL()">Analyze URL</button>
+    </div>
 
-        // Plot confusion heatmap
-        function plotConfusion(cm) {
-            const data = [{
-                z: cm,
-                x: ['Legitimate', 'Phishing'],
-                y: ['Legitimate', 'Phishing'],
-                type: 'heatmap',
-                colorscale: 'Viridis',
-                text: cm.map(row => row.map(val => val.toString())),
-                texttemplate: '%{text}',
-                textfont: {size: 16, color: 'white'},
-                hovertemplate: '%{y} (True) vs %{x} (Predicted): %{z}<extra></extra>'
-            }];
-            const layout = {
-                title: 'Confusion Matrix (Test Set)',
-                xaxis: {title: 'Predicted Label'},
-                yaxis: {title: 'True Label'},
-                height: 400,
-                width: 450
-            };
-            Plotly.newPlot('confusion-plot', data, layout);
-        }
+    <!-- EMAIL -->
+    <div id="emailTab" style="display:none;">
+        <h2>📧 Email Detection</h2>
+        <textarea id="emailText" placeholder="Paste email content"></textarea>
+        <input id="emailSender" type="email" placeholder="sender@example.com">
+        <button class="action" onclick="analyzeEmail()">Analyze Email</button>
+    </div>
 
-        // Plot ROC
-        function plotROC(roc) {
-            const trace = {
-                x: roc.fpr,
-                y: roc.tpr,
-                mode: 'lines',
-                type: 'scatter',
-                name: 'ROC',
-                line: {shape: 'hv'}
-            };
-            const layout = {
-                title: `ROC Curve (AUC = ${roc.auc.toFixed(3)})`,
-                xaxis: {title: 'FPR'},
-                yaxis: {title: 'TPR'},
-                width: 400, height: 400
-            };
-            Plotly.newPlot('roc-plot', [trace], layout);
-        }
+    <div id="result">Results will appear here...</div>
 
-        // Plot ablation bars
-        function plotAblation(ablation) {
-            const categories = Object.keys(ablation);
-            const accs = categories.map(c => ablation[c].acc);
-            const f1s = categories.map(c => ablation[c].f1);
-            const data = [
-                {x: categories, y: accs, type: 'bar', name: 'Accuracy'},
-                {x: categories, y: f1s, type: 'bar', name: 'F1'}
-            ];
-            Plotly.newPlot('ablation-plot', data, {barmode: 'group', title: 'Ablation Study'});
-        }
+</div>
 
-        // Plot dataset analysis
-        function plotDatasetAnalysis(data, container) {
-            for (const [key, dataset] of Object.entries(data)) {
-                if (dataset.error) {
-                    container.innerHTML += `<p>Error loading ${key}: ${dataset.error}</p>`;
-                    continue;
-                }
-                
-                const datasetDiv = document.createElement('div');
-                datasetDiv.style.border = '1px solid #ddd';
-                datasetDiv.style.borderRadius = '8px';
-                datasetDiv.style.padding = '15px';
-                datasetDiv.style.marginBottom = '20px';
-                datasetDiv.innerHTML = `<h4>${dataset.name} Dataset</h4>`;
-                
-                // Stats grid
-                const statsGrid = document.createElement('div');
-                statsGrid.style.display = 'grid';
-                statsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(250px, 1fr))';
-                statsGrid.style.gap = '15px';
-                
-                // Sample count
-                const sampleDiv = document.createElement('div');
-                sampleDiv.id = `sample-${key}`;
-                statsGrid.appendChild(sampleDiv);
-                
-                // Label distribution pie chart
-                if (dataset.label_distribution) {
-                    const pieDiv = document.createElement('div');
-                    pieDiv.id = `pie-${key}`;
-                    statsGrid.appendChild(pieDiv);
-                }
-                
-                datasetDiv.appendChild(statsGrid);
-                
-                // Length stats
-                if (dataset.url_length_stats || dataset.email_length_stats) {
-                    const lengthDiv = document.createElement('div');
-                    lengthDiv.id = `length-${key}`;
-                    lengthDiv.style.marginTop = '15px';
-                    datasetDiv.appendChild(lengthDiv);
-                }
-                
-                // Additional gauges
-                const gaugeGrid = document.createElement('div');
-                gaugeGrid.style.display = 'grid';
-                gaugeGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
-                gaugeGrid.style.gap = '15px';
-                gaugeGrid.style.marginTop = '15px';
-                
-                if (dataset.https_percentage !== undefined) {
-                    const httpsDiv = document.createElement('div');
-                    httpsDiv.id = `https-${key}`;
-                    gaugeGrid.appendChild(httpsDiv);
-                }
-                
-                if (dataset.ip_percentage !== undefined) {
-                    const ipDiv = document.createElement('div');
-                    ipDiv.id = `ip-${key}`;
-                    gaugeGrid.appendChild(ipDiv);
-                }
-                
-                if (gaugeGrid.children.length > 0) {
-                    datasetDiv.appendChild(gaugeGrid);
-                }
-                
-                container.appendChild(datasetDiv);
-            }
-            
-            // Now create the plots after all elements are in the DOM
-            for (const [key, dataset] of Object.entries(data)) {
-                if (dataset.error) continue;
-                
-                // Sample count
-                const sampleData = [{
-                    type: 'indicator',
-                    mode: 'number',
-                    value: dataset.total_samples,
-                    title: {text: 'Total Samples'},
-                    domain: {x: [0, 1], y: [0, 1]}
-                }];
-                Plotly.newPlot(`sample-${key}`, sampleData, {height: 150});
-                
-                // Label distribution pie chart
-                if (dataset.label_distribution) {
-                    const labels = Object.keys(dataset.label_distribution);
-                    const values = Object.values(dataset.label_distribution);
-                    const pieData = [{
-                        type: 'pie',
-                        labels: labels,
-                        values: values,
-                        title: 'Label Distribution'
-                    }];
-                    Plotly.newPlot(`pie-${key}`, pieData, {height: 300});
-                }
-                
-                // Length stats
-                if (dataset.url_length_stats || dataset.email_length_stats) {
-                    let lengthData;
-                    if (dataset.url_length_stats) {
-                        lengthData = {
-                            x: [dataset.url_length_stats.min, dataset.url_length_stats.mean, dataset.url_length_stats.median, dataset.url_length_stats.max],
-                            y: ['Min', 'Mean', 'Median', 'Max'],
-                            type: 'bar',
-                            orientation: 'h',
-                            name: 'URL Length'
-                        };
-                    } else {
-                        lengthData = {
-                            x: [dataset.email_length_stats.min, dataset.email_length_stats.mean, dataset.email_length_stats.median, dataset.email_length_stats.max],
-                            y: ['Min', 'Mean', 'Median', 'Max'],
-                            type: 'bar',
-                            orientation: 'h',
-                            name: 'Email Length'
-                        };
-                    }
-                    
-                    Plotly.newPlot(`length-${key}`, [lengthData], {height: 250, title: lengthData.name + ' Statistics'});
-                }
-                
-                // Additional gauges
-                if (dataset.https_percentage !== undefined) {
-                    const httpsData = [{
-                        type: 'indicator',
-                        mode: 'gauge+number',
-                        value: dataset.https_percentage,
-                        title: {text: 'HTTPS Usage %'},
-                        gauge: {axis: {range: [0, 100]}}
-                    }];
-                    Plotly.newPlot(`https-${key}`, httpsData, {height: 200});
-                }
-                
-                if (dataset.ip_percentage !== undefined) {
-                    const ipData = [{
-                        type: 'indicator',
-                        mode: 'gauge+number',
-                        value: dataset.ip_percentage,
-                        title: {text: 'IP Address Usage %'},
-                        gauge: {axis: {range: [0, 100]}}
-                    }];
-                    Plotly.newPlot(`ip-${key}`, ipData, {height: 200});
-                }
-            }
-        }
+<script>
 
-        document.getElementById('phishForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            document.getElementById('result').innerHTML = '<p>Analyzing...</p>';
-            
-            const emailText = document.getElementById('emailText').value;
-            const url = document.getElementById('urlInput').value;
-            const emailAddress = document.getElementById('emailAddress').value;
+function switchTab(tab) {
+    document.getElementById('urlTab').style.display = 'none';
+    document.getElementById('emailTab').style.display = 'none';
 
-            try {
-                // 1. Predict
-                const predRes = await fetch('http://localhost:5000/predict_email_url', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email_text: emailText, url: url, email_address: emailAddress})
-                });
-                const predData = await predRes.json();
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-                // Render prediction results
-                const resultDiv = document.getElementById('result');
-                const isPhishing = predData.classification === 'Phishing';
-                const flag = isPhishing ? 'PHISHING ALERT' : 'LEGITIMATE';
-                const flagClass = isPhishing ? 'alert-phishing' : 'alert-legitimate';
-                
-                resultDiv.innerHTML = `
-                    <h2>Analysis Result</h2>
-                    <div class="${flagClass}">
-                        <div style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">${flag}</div>
-                        <div style="display: flex; gap: 20px; justify-content: center;">
-                            <div class="badge prob-badge">Confidence: ${(predData.probability * 100).toFixed(1)}%</div>
-                            <div class="badge ${isPhishing ? 'phish' : 'legit'}">${predData.classification}</div>
-                        </div>
-                    </div>
-                    <div id="features-table"></div>
-                    <div id="shap-plot"></div>
-                    <h3>Loading Visualizations...</h3>
-                    <div id="viz-container"></div>
-                `;
+    if (tab === 'url') {
+        document.getElementById('urlTab').style.display = 'block';
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    } else {
+        document.getElementById('emailTab').style.display = 'block';
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    }
+}
 
-                // 2. Features table
-                plotFeaturesTable(predData.feature_names, predData.full_features);
+// URL
+async function analyzeURL() {
+    const url = document.getElementById('urlInput').value;
+    if (!url) return alert("Enter a URL");
 
-                // 3. SHAP plot
-                plotShapBar(predData.top_shap);
+    document.getElementById('result').innerHTML = "Analyzing URL...";
 
-                // 4. Metrics
-                const metricsRes = await fetch('http://localhost:5000/metrics');
-                const metricsData = await metricsRes.json();
-
-                const vizContainer = document.getElementById('viz-container');
-                vizContainer.innerHTML = `
-                    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
-                        <div id="confusion-plot" style="width:45%; min-width: 400px;"></div>
-                        <div id="roc-plot" style="width:45%; min-width: 400px;"></div>
-                    </div>
-                    <div id="ablation-plot" style="width:100%; height:400px; margin-top: 20px;"></div>
-                `;
-
-                plotConfusion(metricsData.confusion_matrix);
-                plotROC(metricsData.roc);
-                plotAblation(metricsData.ablation);
-
-                // 5. Dataset Analysis
-                const datasetRes = await fetch('http://localhost:5000/dataset_analysis');
-                const datasetData = await datasetRes.json();
-
-                const datasetContainer = document.createElement('div');
-                datasetContainer.innerHTML = '<h3>Dataset Analysis & Associations</h3>';
-                datasetContainer.style.marginTop = '30px';
-                document.getElementById('result').appendChild(datasetContainer);
-
-                plotDatasetAnalysis(datasetData, datasetContainer);
-
-            } catch (error) {
-                document.getElementById('result').innerHTML = `<p>Error: ${error.message}. Ensure backend running at localhost:5000.</p>`;
-            }
+    try {
+        const res = await fetch('/predict_url', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ url: url })
         });
-    </script>
 
-    <style>
-        .badge {
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 18px;
-        }
-        .prob-badge { background: #007bff; color: white; }
-        .phish { background: #dc3545; color: white; }
-        .legit { background: #28a745; color: white; }
-        
-        .alert-phishing {
-            background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 5px solid #8b0000;
-            margin: 15px 0;
-            box-shadow: 0 4px 6px rgba(220, 53, 69, 0.3);
-        }
-        
-        .alert-legitimate {
-            background: linear-gradient(135deg, #28a745 0%, #51cf66 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 5px solid #1b5e20;
-            margin: 15px 0;
-            box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);
-        }
-    </style>
+        const data = await res.json();
+        showResult(data, "URL Model");
+
+    } catch {
+        document.getElementById('result').innerHTML = "Error connecting to backend.";
+    }
+}
+
+// Email
+async function analyzeEmail() {
+    const emailText = document.getElementById('emailText').value;
+    const sender = document.getElementById('emailSender').value;
+
+    if (!emailText) return alert("Enter email text");
+
+    document.getElementById('result').innerHTML = "Analyzing Email...";
+
+    try {
+        const res = await fetch('/predict_email', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                email_text: emailText,
+                email_address: sender
+            })
+        });
+
+        const data = await res.json();
+        showResult(data, "Email Model");
+
+    } catch {
+        document.getElementById('result').innerHTML = "Error connecting to backend.";
+    }
+}
+
+// Result UI
+function showResult(data, modelName) {
+    const isPhish = data.classification === "Phishing";
+    const prob = data.probability;
+
+    const risk =
+        prob > 0.7 ? "High 🚨" :
+        prob > 0.4 ? "Medium ⚠️" :
+        "Low ✅";
+
+    document.getElementById('result').innerHTML = `
+        <h2>${isPhish ? "🚨 PHISHING DETECTED" : "✅ LEGITIMATE"}</h2>
+        <p>
+            Confidence: ${(prob * 100).toFixed(2)}% <br>
+            Risk Level: ${risk}
+        </p>
+
+        <span class="badge ${isPhish ? 'phish' : 'legit'}">
+            ${data.classification}
+        </span>
+
+        <p class="note">Model used: ${modelName}</p>
+
+        <div id="shapPlot"></div>
+    `;
+
+    if (data.top_shap) {
+        Plotly.newPlot('shapPlot', [{
+            x: Object.values(data.top_shap),
+            y: Object.keys(data.top_shap),
+            type: 'bar',
+            orientation: 'h',
+            marker: {
+                color: Object.values(data.top_shap).map(v => v > 0 ? '#ef4444' : '#22c55e')
+            }
+        }], {
+            title: 'Top SHAP Features',
+            paper_abgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { color: 'white' }
+        });
+    }
+}
+
+</script>
+
 </body>
 </html>
